@@ -1,0 +1,87 @@
+<!-- Solo copia y pega esto en tu editor de codigo y abrelo en live server ;) -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>AO3 Scraper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class=" bg-gradient-to-br from-pink-100 via-pink-200 to-pink-300 font-sans m-0 p-0">
+
+  <div class="min-h-screen flex flex-col items-center justify-start">
+    <h1 class="mt-10 text-white text-3xl font-bold drop-shadow-md">AO3 Scraper</h1>
+
+    <div class="flex flex-col items-center gap-4 mt-5 w-full max-w-2xl px-4">
+      <textarea id="urls" placeholder="Pega aquí los links de AO3, uno por línea" 
+        class="w-full h-32 p-3 border border-gray-300 rounded-lg text-sm resize-y"></textarea>
+      
+      <button onclick="scrapeAll()"
+        class="w-full bg-pink-500 hover:bg-pink-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+        Extraer
+      </button>
+    </div>
+
+    <div id="output" class="result mt-5 w-full max-w-2xl bg-white rounded-xl shadow-md p-5 min-h-[150px] overflow-y-auto text-left">
+      🔎 Aquí aparecerán los resultados...
+    </div>
+  </div>
+
+  <script>
+    async function scrapeAO3(url, retries = 3) {
+      const proxy = "https://api.allorigins.win/get?url=";
+      for (let i = 0; i < retries; i++) {
+        try {
+          const res = await fetch(proxy + encodeURIComponent(url));
+          const data = await res.json();
+          const html = data.contents;
+
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, "text/html");
+
+          const title = doc.querySelector("h2.title.heading")?.innerText.trim() || "Sin título";
+          const author = doc.querySelector("h3.byline.heading")?.innerText.trim() || "Autor desconocido";
+
+          const shipsList = doc.querySelectorAll("dd.relationship.tags li a");
+          const ships = shipsList.length > 0 ? Array.from(shipsList).map(s => s.innerText.trim()).join(", ") : "Sin ship";
+
+          const tagsList = doc.querySelectorAll("dd.freeform.tags li a");
+          const tags = tagsList.length > 0 ? Array.from(tagsList).map(t => t.innerText.trim()).join(", ") : "Sin etiquetas";
+
+          const summary = doc.querySelector("blockquote.userstuff")?.innerText.trim() || "Sin resumen";
+          const chapters = doc.querySelector("dd.chapters")?.innerText.trim() || "No especificado";
+
+          return { title, author, ships, tags, summary, chapters, url };
+        } catch (e) {
+          console.warn(`Intento ${i + 1} fallido para ${url}`);
+        }
+      }
+      return null;
+    }
+
+    async function scrapeAll() {
+      const urls = document.getElementById("urls").value.trim().split("\n").filter(u => u);
+      const output = document.getElementById("output");
+      output.innerHTML = "<p>⏳ Extrayendo datos...</p>";
+
+      let results = [];
+      for (const url of urls) {
+        const data = await scrapeAO3(url);
+        if (data) results.push(data);
+        else results.push({ title: "Error al extraer", url });
+      }
+
+      output.innerHTML = results.map(fic => `
+        <div class="fic border-b last:border-b-0 pb-3">
+          <h2 class="text-3xl font-semibold text-gray-800 mb-4">${fic.title}</h2>
+          <p><b>Autor:</b> ${fic.author || "Desconocido"}</p>
+          <p><b>Ships:</b> ${fic.ships || "Sin ship"}</p>
+          <p><b>Etiquetas:</b> ${fic.tags || "Sin etiquetas"}</p>
+          <p><b>Capítulos:</b> ${fic.chapters || "No especificado"}</p>
+          <p><b>Resumen:</b><br>${fic.summary || "Sin resumen"}</p>
+          <p><b>Link:</b> <a href="${fic.url}" target="_blank" class="text-pink-600 hover:underline">${fic.url}</a></p>
+        </div>
+      `).join("");
+    }
+  </script>
+</body>
+</html>
